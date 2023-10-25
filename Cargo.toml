@@ -1,0 +1,17 @@
+[package]
+name = "zoobench"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.75"
+clap = { version = "4.4.6", features = ["derive", "env"] }
+zookeeper = "0.8.0"
+log = "0.4.20"
+rand = { version = "0.8.5", features = [] }
+bytesize = "1.3.0"
+indicatif = "0.17.7"
+simple_logger = { version = "4.2.0", features = ["timestamps", "colors", "stderr", "threads"] }
+thiserror = "1.0.50"
