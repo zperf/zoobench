@@ -15,6 +15,7 @@ Options:
   -s, --node-size <NODE_SIZE>  ZNode value size in bytes [default: 128K]
   -e, --ephemeral              Create ephemeral znode or not
   -p, --prefix <PREFIX>        Test prefix [default: /zoobench]
+  -d, --digest <DIGEST>
   -h, --help                   Print help
   -V, --version                Print version
 ```
