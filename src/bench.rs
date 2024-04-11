@@ -1,10 +1,10 @@
-use std::time::Instant;
-use zookeeper::{Acl, CreateMode, WatchedEvent, ZkError, ZooKeeper, ZooKeeperExt};
-use std::thread;
-use std::time::Duration;
+use crate::error::BenchError;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rand::RngCore;
-use crate::error::BenchError;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
+use zookeeper::{Acl, CreateMode, WatchedEvent, ZkError, ZooKeeper, ZooKeeperExt};
 
 use crate::Cli;
 
@@ -27,6 +27,7 @@ pub struct BenchOption {
     node_value: Vec<u8>,
     prefix: String,
     node_path_template: String,
+    digest: Option<String>,
 }
 
 impl From<Cli> for BenchOption {
@@ -42,6 +43,7 @@ impl From<Cli> for BenchOption {
             node_value: buf,
             node_path_template: format!("{}/test-node", c.prefix.clone()),
             prefix: c.prefix,
+            digest: c.digest,
         }
     }
 }
@@ -53,24 +55,30 @@ pub struct BenchResult {
 }
 
 fn new_progress_style() -> ProgressStyle {
-    ProgressStyle::with_template(
-        "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
-    ).unwrap().progress_chars("##-")
+    ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+        .unwrap()
+        .progress_chars("##-")
 }
 
-fn skip_last<T>(mut iter: impl Iterator<Item=T>) -> impl Iterator<Item=T> {
+fn skip_last<T>(mut iter: impl Iterator<Item = T>) -> impl Iterator<Item = T> {
     let last = iter.next();
-    iter.scan(last, |state, item| {
-        std::mem::replace(state, Some(item))
-    })
+    iter.scan(last, |state, item| std::mem::replace(state, Some(item)))
 }
 
 fn prepare(opt: &BenchOption) -> Result<(), anyhow::Error> {
     let zk = ZooKeeper::connect(opt.hosts.as_str(), opt.timeout, LoggingWatcher)?;
+
+    match &opt.digest {
+        Some(d) => {
+            zk.add_auth("digest", d.to_string().into_bytes())?;
+        }
+        None => {}
+    }
+
     match zk.delete_recursive(opt.prefix.as_str()) {
         Ok(_) => {}
         Err(e) if e == ZkError::NoNode => {}
-        Err(e) => return Err(e.into())
+        Err(e) => return Err(e.into()),
     }
 
     let mut s = String::new();
@@ -82,17 +90,24 @@ fn prepare(opt: &BenchOption) -> Result<(), anyhow::Error> {
         s.push('/');
         s.push_str(p);
 
-        match zk.create(s.as_str(), Vec::new(), Acl::open_unsafe().clone(), CreateMode::Persistent) {
+        match zk.create(
+            s.as_str(),
+            Vec::new(),
+            Acl::open_unsafe().clone(),
+            CreateMode::Persistent,
+        ) {
             Ok(_) => {}
             Err(e) if e == ZkError::NodeExists => {}
-            Err(e) => return Err(e.into())
+            Err(e) => return Err(e.into()),
         }
     }
     Ok(())
 }
 
 fn do_bench<T>(opt: &BenchOption, bench_fn: T) -> Result<Duration, anyhow::Error>
-    where T: Fn(u32, ProgressBar, &BenchOption) -> Result<(), anyhow::Error> + Send + Sync + Copy    {
+where
+    T: Fn(u32, ProgressBar, &BenchOption) -> Result<(), anyhow::Error> + Send + Sync + Copy,
+{
     let bar = MultiProgress::new();
     let start = Instant::now();
     let mut is_err = false;
@@ -144,8 +159,17 @@ fn do_tps_bench(tid: u32, pb: ProgressBar, opt: &BenchOption) -> Result<(), anyh
     let count = opt.iteration / opt.threads;
     for i in tid * count..(tid + 1) * count {
         let path = opt.node_path_template.clone() + i.to_string().as_str();
-        let mode = if opt.ephemeral { CreateMode::Ephemeral } else { CreateMode::Persistent };
-        zk.create(path.as_str(), opt.node_value.to_vec(), Acl::open_unsafe().clone(), mode)?;
+        let mode = if opt.ephemeral {
+            CreateMode::Ephemeral
+        } else {
+            CreateMode::Persistent
+        };
+        zk.create(
+            path.as_str(),
+            opt.node_value.to_vec(),
+            Acl::open_unsafe().clone(),
+            mode,
+        )?;
         pb.inc(1);
         pb.set_message(format!("Created {}", path))
     }

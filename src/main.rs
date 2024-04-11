@@ -3,11 +3,10 @@
 mod bench;
 mod error;
 
-use std::time::Duration;
-use bytesize::ByteSize;
-use clap::{Parser};
 use crate::bench::BenchOption;
-
+use bytesize::ByteSize;
+use clap::Parser;
+use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -38,6 +37,9 @@ struct Cli {
     /// Test prefix
     #[arg(long, short, default_value = "/zoobench")]
     prefix: String,
+
+    #[arg(long, short)]
+    digest: Option<String>,
 }
 
 fn parse_human_bytes(arg: &str) -> Result<usize, String> {
